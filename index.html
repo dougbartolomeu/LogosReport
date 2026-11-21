@@ -5,13 +5,16 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>LogosReport</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="logosreport.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="#"><span class="brand-mark">LR</span><span><strong>LogosReport</strong><small>Editor visual de relatórios</small></span></a>
     <div class="top-actions">
-      <label class="button secondary file-button">Abrir JSON<input id="json-file" type="file" accept="application/json,.json"></label>
+      <label class="button secondary file-button">Abrir dados (JSON)<input id="json-file" type="file" accept="application/json,.json"></label>
+      <label class="button secondary file-button">Abrir modelo<input id="model-file" type="file" accept="application/json,.json,text/html,.html"></label>
+      <button class="button secondary" id="save-model" type="button">Salvar modelo</button>
       <button class="button secondary" id="preview-button" type="button">Pré-visualizar</button>
       <button class="button primary" id="export-button" type="button">Exportar HTML</button>
     </div>
@@ -41,6 +44,8 @@
         <div class="section-heading"><div><span class="eyebrow">PÁGINA</span><h2>Configuração</h2></div></div>
         <label class="setting-row">Papel<select id="page-size"><option value="A4">A4</option><option value="Letter">Carta</option></select></label>
         <label class="setting-row">Orientação<select id="orientation"><option value="portrait">Retrato</option><option value="landscape">Paisagem</option></select></label>
+        <label class="setting-row stacked">CSS personalizado (vai no HTML exportado)<textarea id="custom-css" spellcheck="false" placeholder=".lr-report { --lr-font: Arial; --lr-section-bg: #e5e5e5; }"></textarea></label>
+        <label class="check-row"><input id="include-sample" type="checkbox"> Incluir os dados de exemplo no HTML exportado</label>
       </section>
     </aside>
     <section class="center-panel">

@@ -15,8 +15,8 @@
     return known[field] || String(field || "").replace(/_/g, " ").replace(/\b\w/g, char => char.toUpperCase());
   }
   function normalizeColumn(column) {
-    if (typeof column === "string") return { field: column, label: columnCaption(column) };
-    return { field: column?.field || "", label: column?.label ?? columnCaption(column?.field) };
+    if (typeof column === "string") return { field: column, label: columnCaption(column), format: "" };
+    return { field: column?.field || "", label: column?.label ?? columnCaption(column?.field), format: column?.format || "" };
   }
   const cell = (type, props = {}) => {
     const item = { id: makeId(), type, width: 100, align: "left", fontSize: 10, ...props };
@@ -47,7 +47,8 @@
   ] };
   function makeId() { return "c" + Math.random().toString(36).slice(2, 10); }
   function esc(value) { return String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
-  function getPath(source, path) { return path ? path.replace(/\[\]/g, "").split(".").reduce((value, key) => value == null ? undefined : value[key], source) : undefined; }
+  // A leitura de caminhos vive no runtime (logosreport.js), para editor e template se comportarem igual.
+  function getPath(source, path) { return window.LogosReport.getPath(source, path); }
   function collectFields(value, prefix = "", output = []) {
     if (Array.isArray(value)) {
       if (value.length) collectFields(value[0], prefix + "[]", output);
@@ -59,7 +60,10 @@
     } else output.push({ path: prefix || "valor", kind: value === null ? "nulo" : typeof value });
     return output;
   }
-  function formatValue(value) { return value == null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value); }
+  // Listas do JSON (primeiro nível): "itens[].codigo" indica que "itens" é uma lista. Listas vazias também entram.
+  function listPaths(data) { const found = new Set(); collectFields(data).forEach(field => { const at = field.path.indexOf("[]"); if (at > 0) found.add(field.path.slice(0, at)); }); return [...found]; }
+  function formatValue(value, formatName) { return window.LogosReport.format(value, formatName); }
+  const FORMATS = [["", "Sem formatação"], ["moeda", "Moeda (R$)"], ["data", "Data (dd/mm/aaaa)"], ["datahora", "Data e hora"], ["numero", "Número (2 casas)"]];
   function selectedCell() { for (const currentRow of state.rows) { const found = currentRow.cells.find(item => item.id === state.selected); if (found) return found; } return null; }
   function findRow(id) { return state.rows.find(item => item.id === id); }
   // A célula é um contêiner flex: text-align não move os filhos, então o alinhamento usa justify-content.
@@ -73,15 +77,15 @@
     const classes = "report-cell" + (editor && state.selected === item.id ? " selected" : "");
     const style = "flex-basis:" + Number(item.width || 100) + "%;max-width:" + Number(item.width || 100) + "%;font-size:" + Number(item.fontSize || 10) + "px;text-align:" + esc(item.align || "left") + ";" + flexJustify(item) + (item.bold ? "font-weight:700;" : "") + (item.border ? "border:1px solid #333;" : "") + (item.height && item.type === "box" ? "min-height:" + Number(item.height) + "mm;" : "") + (item.heightPx ? "min-height:" + Number(item.heightPx) + "px;" : "");
     let body = "";
-    if (item.type === "field") body = (item.label ? '<span class="cell-label">' + esc(item.label) + '</span>' : "") + '<span class="cell-value ' + (raw == null ? "placeholder" : "") + '">' + esc(raw == null ? "{{" + (item.path || "campo") + "}}" : formatValue(raw)) + "</span>";
+    if (item.type === "field") body = (item.label ? '<span class="cell-label">' + esc(item.label) + '</span>' : "") + '<span class="cell-value ' + (raw == null ? "placeholder" : "") + '">' + esc(raw == null ? "{{" + (item.path || "campo") + "}}" : formatValue(raw, item.format)) + "</span>";
     if (item.type === "text") body = '<span class="cell-value">' + esc(item.text || "Texto") + "</span>";
     if (item.type === "section") body = '<span class="cell-value">' + esc(item.text || "Título da seção") + "</span>";
-    if (item.type === "box") body = '<span class="cell-value">' + esc(raw == null ? "" : formatValue(raw)) + "</span>";
+    if (item.type === "box") body = '<span class="cell-value">' + esc(raw == null ? "" : formatValue(raw, item.format)) + "</span>";
     if (item.type === "divider") body = "<hr>";
     if (item.type === "table") {
       const records = getPath(data, item.path);
       const columns = (item.columns && item.columns.length ? item.columns : (Array.isArray(records) && records[0] ? Object.keys(records[0]).map(key => ({ field: key, label: columnCaption(key) })) : [])).map(normalizeColumn);
-      body = Array.isArray(records) ? '<table><thead><tr>' + columns.map(column => "<th>" + esc(column.label || columnCaption(column.field)) + "</th>").join("") + "</tr></thead><tbody>" + records.map(record => "<tr>" + columns.map(column => "<td>" + esc(formatValue(record?.[column.field])) + "</td>").join("") + "</tr>").join("") + "</tbody></table>" : '<span class="placeholder">Vincule uma lista do JSON</span>';
+      body = Array.isArray(records) ? '<table><thead><tr>' + columns.map(column => "<th>" + esc(column.label || columnCaption(column.field)) + "</th>").join("") + "</tr></thead><tbody>" + records.map(record => "<tr>" + columns.map(column => "<td>" + esc(formatValue(getPath(record, column.field), column.format)) + "</td>").join("") + "</tr>").join("") + "</tbody></table>" : '<span class="placeholder">Vincule uma lista do JSON</span>';
     }
     const actions = editor ? '<span class="cell-actions"><button type="button" class="cell-delete" data-cell-action="delete" title="Excluir elemento" aria-label="Excluir elemento"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 4.5h9M6 4.5V3h4v1.5m1.5 0-.6 8H5.1l-.6-8m3 2v4m2-4v4"/></svg></button><button type="button" data-cell-action="up" title="Mover para cima" aria-label="Mover para cima">↑</button><button type="button" data-cell-action="down" title="Mover para baixo" aria-label="Mover para baixo">↓</button></span><button type="button" class="resize-handle resize-east" data-resize="width" title="Arraste para ajustar a largura" aria-label="Ajustar largura"></button><button type="button" class="resize-handle resize-south" data-resize="height" title="Arraste para ajustar a altura" aria-label="Ajustar altura"></button>' : "";
     return '<div class="' + classes + '" data-cell-id="' + esc(item.id) + '" data-type="' + esc(item.type) + '" style="' + style + '">' + body + actions + "</div>";
@@ -112,10 +116,12 @@
     let html = "";
     if (item.type === "field" || item.type === "box") html += prop("Caminho no JSON", "path", item.path || "", "text", { hint: "Exemplo: ordem.cliente" });
     if (item.type === "field") html += prop("Rótulo", "label", item.label || "");
+    if (item.type === "field" || item.type === "box") html += prop("Formato do valor", "format", item.format || "", "select", { values: FORMATS });
     if (["text", "section"].includes(item.type)) html += prop(item.type === "section" ? "Título da faixa" : "Texto", "text", item.text || "", "textarea");
     if (item.type === "table") {
-      const lists = collectFields(state.data).filter(field => field.path.endsWith("[]"));
-      html += prop("Lista no JSON", "path", item.path || "", "select", { values: [["", "Selecione uma lista"], ...lists.map(field => [field.path, field.path])] });
+      const lists = listPaths(state.data);
+      if (item.path && !lists.includes(item.path)) lists.push(item.path); // mantém visível o vínculo atual, mesmo que a lista não exista nestes dados
+      html += prop("Lista no JSON", "path", item.path || "", "select", { values: [["", "Selecione uma lista"], ...lists.map(path => [path, path])] });
       const records = getPath(state.data, item.path);
       const available = Array.isArray(records) && records[0] ? Object.keys(records[0]) : [];
       if (!item.columns.length && available.length) item.columns = available.map(field => ({ field, label: columnCaption(field) }));
@@ -123,7 +129,7 @@
       html += item.columns.map((column, index) => {
         const current = normalizeColumn(column);
         const fieldOptions = [["", "Selecione a propriedade"], ...available.map(field => [field, field])];
-        return '<div class="table-column-editor" data-column-index="' + index + '"><label>Propriedade do JSON</label><select class="property-control" data-column-prop="field">' + fieldOptions.map(option => '<option value="' + esc(option[0]) + '" ' + (option[0] === current.field ? "selected" : "") + ">" + esc(option[1]) + "</option>").join("") + '</select><label>Descrição no relatório</label><div class="column-label-row"><input class="property-control" data-column-prop="label" value="' + esc(current.label) + '" aria-label="Descrição da coluna"><button type="button" class="column-remove" data-remove-column="' + index + '" title="Excluir coluna" aria-label="Excluir coluna">×</button></div></div>';
+        return '<div class="table-column-editor" data-column-index="' + index + '"><label>Propriedade do JSON</label><select class="property-control" data-column-prop="field">' + fieldOptions.map(option => '<option value="' + esc(option[0]) + '" ' + (option[0] === current.field ? "selected" : "") + ">" + esc(option[1]) + "</option>").join("") + '</select><label>Formato do valor</label><select class="property-control" data-column-prop="format">' + FORMATS.map(option => '<option value="' + esc(option[0]) + '" ' + (option[0] === current.format ? "selected" : "") + ">" + esc(option[1]) + "</option>").join("") + '</select><label>Descrição no relatório</label><div class="column-label-row"><input class="property-control" data-column-prop="label" value="' + esc(current.label) + '" aria-label="Descrição da coluna"><button type="button" class="column-remove" data-remove-column="' + index + '" title="Excluir coluna" aria-label="Excluir coluna">×</button></div></div>';
       }).join("");
       html += '<button type="button" class="add-column-button" id="add-table-column">＋ Adicionar coluna</button>';
     }
@@ -171,27 +177,126 @@
     catch (error) { $("#json-status").textContent = "JSON inválido: " + error.message; $("#json-status").classList.add("error"); }
   }
   function safeJson(value) { return JSON.stringify(value).replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029"); }
-  function exportCss() {
-    return "*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#111}.report-row{display:flex;align-items:stretch;flex-wrap:wrap;min-height:17px;margin:0}.report-cell{position:relative;min-width:0;padding:2px 4px;display:flex;align-items:center;overflow-wrap:anywhere}.report-cell[data-type=section]{justify-content:center;background:#e5e5e5;border:1px solid #555!important;font-weight:700;text-align:center;min-height:17px;padding:1px 3px}.report-cell[data-type=box]{align-items:flex-start;border:1px solid #333!important;padding:4px;white-space:pre-wrap}.report-cell[data-type=table]{display:block;padding:0}.report-cell[data-type=table] table{width:100%;border-collapse:collapse}.report-cell[data-type=table] th,.report-cell[data-type=table] td{padding:2px 4px;text-align:left;vertical-align:top}.report-cell[data-type=table] th{border-bottom:1px solid #777}.cell-label{font-weight:700;margin-right:5px;white-space:nowrap}.cell-value{min-width:0}.report-cell[data-type=divider] hr{width:100%;border:0;border-top:1px solid #777}@page{size:" + state.page + " " + state.orientation + ";margin:12mm}@media screen{body{max-width:1000px;margin:25px auto;padding:0 25px}}@media print{.report-row,.report-cell{break-inside:avoid}.report-cell[data-type=table] thead{display:table-header-group}.report-cell[data-type=table] tr{break-inside:avoid}}";
+  // ----- Template exportado (formato LogosReport v1, veja docs/FORMATO.md) -----
+  // Exportação, prévia e impressão usam a MESMA função (templateHtml): o que se vê é o que se exporta.
+  const MODEL_FORMAT = "logosreport-model", MODEL_VERSION = 3;
+  const CELL_TYPES = ["field", "text", "section", "table", "box", "divider"];
+  const ALIGNS = ["left", "center", "right"];
+  const FORMAT_NAMES = FORMATS.map(option => option[0]).filter(Boolean);
+  // Converte para número dentro de um intervalo; se não for número válido, usa o padrão.
+  function num(value, fallback, min, max) { const n = Number(value); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback; }
+  // CSS base do template. Tudo usa o prefixo lr- para não colidir com o sistema que embute o relatório;
+  // as variáveis --lr-* são os pontos de personalização (veja o bloco logosreport-custom).
+  function templateCss(page, orientation) {
+    return [
+      "*{box-sizing:border-box}",
+      "body{margin:0}",
+      ".lr-report{font-family:var(--lr-font,Arial,sans-serif);color:var(--lr-color,#111)}",
+      ".lr-row{display:flex;align-items:stretch;flex-wrap:wrap;min-height:17px}",
+      ".lr-cell{position:relative;min-width:0;flex-basis:var(--lr-w,100%);max-width:var(--lr-w,100%);padding:2px 4px;display:flex;align-items:center;overflow-wrap:anywhere}",
+      ".lr-cell[data-type=section]{justify-content:center;background:var(--lr-section-bg,#e5e5e5);border:1px solid var(--lr-border,#555);font-weight:700;text-align:center;padding:1px 3px}",
+      ".lr-cell[data-type=box]{align-items:flex-start;border:1px solid var(--lr-box-border,#333);padding:4px;white-space:pre-wrap}",
+      ".lr-cell[data-type=table]{display:block;padding:0}",
+      ".lr-cell[data-type=divider] hr{width:100%;border:0;border-top:1px solid var(--lr-divider,#777)}",
+      ".lr-label{font-weight:700;margin-right:5px;white-space:nowrap}",
+      ".lr-value{min-width:0}",
+      ".lr-table{width:100%;border-collapse:collapse}",
+      ".lr-table th,.lr-table td{padding:2px 4px;text-align:left;vertical-align:top}",
+      ".lr-table th{border-bottom:1px solid var(--lr-th-border,#777)}",
+      // Linha só com tabela: layout em bloco, para a tabela poder quebrar entre páginas.
+      ".lr-row--table{display:block}",
+      ".lr-row--table .lr-cell{width:var(--lr-w,100%);max-width:none}",
+      "@page{size:" + page + " " + orientation + ";margin:12mm}",
+      "@media screen{body{max-width:1000px;margin:25px auto;padding:0 25px}}",
+      "@media print{.lr-row{break-inside:avoid}.lr-row--table{break-inside:auto}.lr-table thead{display:table-header-group}.lr-table tr{break-inside:avoid}}"
+    ].join("\n");
   }
-  function exportHtml() {
-    const model = { version: 2, page: state.page, orientation: state.orientation, rows: state.rows.map(r => r.cells.map(({ id, ...item }) => item)) };
-    let runtime = "const REPORT_MODEL=" + safeJson(model) + ";";
-    // Escape feito com replace encadeado: evita aspas dentro de objeto literal, que quebravam a sintaxe do script exportado.
-    runtime += "function renderReport(data){const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\\"/g,'&quot;').replace(/'/g,'&#39;');";
-    runtime += "const get=(o,p)=>p?p.replace(/\\[\\]/g,'').split('.').reduce((v,k)=>v==null?undefined:v[k],o):undefined;const val=v=>v==null?'':typeof v==='object'?JSON.stringify(v):String(v);";
-    runtime += "const cell=b=>{let v=(b.type==='field'||b.type==='box')?get(data,b.path):null,x='',font=Number(b.fontSize||10),align=b.align||'left';if(b.type==='field')x=(b.label?'<span class=\\\"cell-label\\\">'+esc(b.label)+'</span>':'')+'<span class=\\\"cell-value\\\">'+esc(val(v))+'</span>';if(b.type==='text'||b.type==='section')x='<span class=\\\"cell-value\\\">'+esc(b.text||'')+'</span>';if(b.type==='box')x='<span class=\\\"cell-value\\\">'+esc(val(v))+'</span>';if(b.type==='divider')x='<hr>';if(b.type==='table'){let a=get(data,b.path),c=(b.columns||[]).map(k=>typeof k==='string'?{field:k,label:k}:k);x=Array.isArray(a)?'<table><thead><tr>'+c.map(k=>'<th>'+esc(k.label||k.field)+'</th>').join('')+'</tr></thead><tbody>'+a.map(r=>'<tr>'+c.map(k=>'<td>'+esc(val(r?.[k.field]))+'</td>').join('')+'</tr>').join('')+'</tbody></table>':'<span>Lista indisponível</span>'}return '<div class=\\\"report-cell\\\" data-type=\\\"'+esc(b.type)+'\\\" style=\\\"flex-basis:'+Number(b.width||100)+'%;max-width:'+Number(b.width||100)+'%;font-size:'+font+'px;text-align:'+esc(align)+';'+(['section','table','divider'].includes(b.type)?'':'justify-content:'+({center:'center',right:'flex-end'}[align]||'flex-start')+';')+(b.bold?'font-weight:700;':'')+(b.border?'border:1px solid #333;':'')+(b.height&&b.type==='box'?'min-height:'+Number(b.height)+'mm;':'')+(b.heightPx?'min-height:'+Number(b.heightPx)+'px;':'')+'\\\">'+x+'</div>'};";
-    runtime += "const root=document.getElementById('relatorio');root.innerHTML=REPORT_MODEL.rows.map(r=>'<div class=\\\"report-row\\\">'+r.map(cell).join('')+'</div>').join('');return root}window.renderReport=renderReport;window.REPORT_DATA=window.REPORT_DATA||" + safeJson(state.data) + ";renderReport(window.REPORT_DATA);";
-    const html = '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Relatório</title><style>' + exportCss() + '</style></head><body><main id="relatorio"></main><script>' + runtime + '</script></body></html>';
-    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
-    const link = document.createElement("a"); link.href = url; link.download = "LogosReport-modelo-relatorio.html"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-    toast("Modelo HTML exportado com linhas e colunas.");
+  // O que o editor guarda (e o que vai dentro do HTML exportado para poder reabrir).
+  function modelPayload() {
+    return { format: MODEL_FORMAT, version: MODEL_VERSION, page: state.page, orientation: state.orientation, customCss: state.customCss || "", rows: state.rows.filter(r => r.cells.length).map(r => r.cells.map(({ id, ...item }) => item)) };
   }
+  // Uma célula do editor vira marcação estática com data-bind/data-format; o runtime só preenche o texto.
+  function templateCell(item) {
+    const width = num(item.width, 100, 10, 100), align = ALIGNS.includes(item.align) ? item.align : "left";
+    const style = "--lr-w:" + width + "%;font-size:" + num(item.fontSize, 10, 7, 48) + "px;text-align:" + align + ";" + flexJustify({ type: item.type, align }) + (item.bold ? "font-weight:700;" : "") + (item.border ? "border:1px solid #333;" : "") + (item.type === "box" && item.height ? "min-height:" + num(item.height, 32, 10, 200) + "mm;" : "") + (item.heightPx ? "min-height:" + num(item.heightPx, 24, 24, 600) + "px;" : "");
+    const fmt = FORMAT_NAMES.includes(item.format) ? ' data-format="' + item.format + '"' : "";
+    const bind = item.path ? ' data-bind="' + esc(String(item.path).replace(/\[\]/g, "")) + '"' : "";
+    let body = "";
+    if (item.type === "field") body = (item.label ? '<span class="lr-label">' + esc(item.label) + "</span>" : "") + '<span class="lr-value"' + bind + fmt + "></span>";
+    else if (item.type === "box") body = '<span class="lr-value"' + bind + fmt + "></span>";
+    else if (item.type === "text" || item.type === "section") body = '<span class="lr-value">' + esc(item.text || "") + "</span>";
+    else if (item.type === "divider") body = "<hr>";
+    else if (item.type === "table") {
+      const columns = (item.columns || []).map(normalizeColumn);
+      const head = columns.map(column => "<th>" + esc(column.label || column.field) + "</th>").join("");
+      const cells = columns.map(column => "<td" + (column.field ? ' data-bind="' + esc(column.field) + '"' : "") + (FORMAT_NAMES.includes(column.format) ? ' data-format="' + column.format + '"' : "") + "></td>").join("");
+      body = '<table class="lr-table"><thead><tr>' + head + '</tr></thead><tbody data-each="' + esc(String(item.path || "").replace(/\[\]/g, "")) + '"><tr>' + cells + "</tr></tbody></table>";
+    }
+    return '<div class="lr-cell" data-type="' + esc(item.type) + '" style="' + style + '">' + body + "</div>";
+  }
+  // Monta o HTML completo. sample=true embute os dados atuais (prévia e impressão); na exportação
+  // isso só acontece se a caixa "Incluir os dados de exemplo" estiver marcada, para não vazar dados reais sem querer.
+  function templateHtml({ sample = false } = {}) {
+    const page = state.page === "Letter" ? "Letter" : "A4", orientation = state.orientation === "landscape" ? "landscape" : "portrait";
+    const rows = state.rows.filter(r => r.cells.length).map(r => '  <div class="lr-row' + (r.cells.length === 1 && r.cells[0].type === "table" ? " lr-row--table" : "") + '">' + r.cells.map(templateCell).join("") + "</div>").join("\n");
+    const customCss = String(state.customCss || "").replace(/<\/style/gi, "<\\/style");
+    const withSample = sample || state.includeSample;
+    return "<!doctype html>\n" +
+      '<html lang="pt-BR" data-logosreport="1">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1">\n<title>Relatório</title>\n' +
+      '<style id="logosreport-base">\n' + templateCss(page, orientation) + "\n</style>\n" +
+      '<style id="logosreport-custom">\n' + customCss + "\n</style>\n</head>\n<body>\n" +
+      '<main class="lr-report" data-lr-version="1">\n' + rows + "\n</main>\n" +
+      '<script type="application/json" id="logosreport-model">' + safeJson(modelPayload()) + "</script>\n" +
+      (withSample ? '<script type="application/json" id="logosreport-sample-data">' + safeJson(state.data) + "</script>\n" : "") +
+      '<script id="logosreport-runtime">\n(' + window.logosReportRuntime.toString() + ")(window);\n</script>\n" +
+      "<script>\n(function () {\n  var sample = document.getElementById('logosreport-sample-data');\n  var data = sample ? JSON.parse(sample.textContent) : window.REPORT_DATA;\n  if (data) LogosReport.render(data, document, { warn: false });\n})();\n</script>\n</body>\n</html>\n";
+  }
+  function download(content, type, name) {
+    const url = URL.createObjectURL(new Blob([content], { type }));
+    const link = document.createElement("a"); link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function exportHtml() { download(templateHtml(), "text/html;charset=utf-8", "LogosReport-modelo-relatorio.html"); toast("Template HTML exportado."); }
+  function saveModel() { download(JSON.stringify(modelPayload(), null, 2), "application/json;charset=utf-8", "LogosReport-modelo.json"); toast("Modelo salvo."); }
   function openPreview() {
-    $("#preview-content").innerHTML = '<div class="preview-sheet">' + state.rows.map(currentRow => '<div class="report-row">' + currentRow.cells.map(item => renderCell(item, state.data, false)).join("") + "</div>").join("") + "</div>";
+    const frame = document.createElement("iframe");
+    frame.className = "preview-frame"; frame.title = "Pré-visualização do relatório";
+    frame.setAttribute("sandbox", "allow-scripts"); // o conteúdo é gerado aqui; sem same-origin, ele não alcança o editor
+    frame.srcdoc = templateHtml({ sample: true });
+    $("#preview-content").replaceChildren(frame);
     $("#preview-dialog").showModal();
   }
-  function printableHtml() { return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Ordem de serviço</title><style>' + exportCss() + '</style></head><body><main class="print-root">' + state.rows.map(currentRow => '<div class="report-row">' + currentRow.cells.map(item => renderCell(item, state.data, false)).join("") + "</div>").join("") + '</main><script>window.onload=()=>window.print()</script></body></html>'; }
+  function printableHtml() {
+    const html = templateHtml({ sample: true }), at = html.lastIndexOf("</body>");
+    return html.slice(0, at) + "<script>window.addEventListener('load',function(){window.print();});</script>\n" + html.slice(at);
+  }
+  // Valida um modelo vindo de arquivo antes de usá-lo: tipos conhecidos, números dentro de limites, textos limitados.
+  function sanitizeModel(raw) {
+    if (!raw || typeof raw !== "object" || !Array.isArray(raw.rows)) throw new Error("o arquivo não é um modelo do LogosReport.");
+    const str = (value, max = 500) => String(value ?? "").slice(0, max);
+    const rows = raw.rows.slice(0, 500).map(entry => (Array.isArray(entry) ? entry : entry?.cells || []).slice(0, 50).map(c => {
+      if (!CELL_TYPES.includes(c?.type)) return null;
+      const item = { id: makeId(), type: c.type, width: num(c.width, 100, 10, 100), align: ALIGNS.includes(c.align) ? c.align : "left", fontSize: num(c.fontSize, 10, 7, 48), bold: !!c.bold, border: !!c.border, path: str(c.path), label: str(c.label), text: str(c.text, 2000), format: FORMAT_NAMES.includes(c.format) ? c.format : "" };
+      if (c.height != null) item.height = num(c.height, 32, 10, 200);
+      if (c.heightPx != null) item.heightPx = num(c.heightPx, 24, 24, 600);
+      item.columns = Array.isArray(c.columns) ? c.columns.slice(0, 50).map(column => normalizeColumn(typeof column === "string" ? column : { field: str(column?.field), label: column?.label == null ? undefined : str(column.label), format: FORMAT_NAMES.includes(column?.format) ? column.format : "" })) : [];
+      return item;
+    }).filter(Boolean)).filter(cells => cells.length).map(cells => ({ id: makeId(), cells }));
+    return { page: raw.page === "Letter" ? "Letter" : "A4", orientation: raw.orientation === "landscape" ? "landscape" : "portrait", customCss: str(raw.customCss, 20000), rows };
+  }
+  // Abre um modelo salvo (.json) ou um HTML exportado por esta versão (o modelo vai no bloco logosreport-model).
+  async function openModelFile(file) {
+    const content = await file.text();
+    let raw;
+    if (/\.html?$/i.test(file.name) || /^\s*</.test(content)) {
+      const block = new DOMParser().parseFromString(content, "text/html").getElementById("logosreport-model");
+      if (!block) throw new Error("o HTML não tem o bloco logosreport-model.");
+      raw = JSON.parse(block.textContent);
+    } else raw = JSON.parse(content);
+    const model = sanitizeModel(raw);
+    Object.assign(state, { page: model.page, orientation: model.orientation, customCss: model.customCss, rows: model.rows, selected: null, selectedRow: null });
+    $("#page-size").value = state.page; $("#orientation").value = state.orientation; $("#custom-css").value = state.customCss;
+    render(); toast("Modelo aberto.");
+  }
   $("#json-input").value = JSON.stringify(demo, null, 2);
   $("#apply-json").addEventListener("click", applyJson);
   $("#json-file").addEventListener("change", async event => { const file = event.target.files?.[0]; if (file) { $("#json-input").value = await file.text(); applyJson(); event.target.value = ""; } });
@@ -286,7 +391,8 @@
       const labelWasDefault = !column.label || column.label === columnCaption(column.field);
       column.field = control.value;
       if (labelWasDefault) column.label = columnCaption(column.field);
-    } else column.label = control.value;
+    } else if (control.dataset.columnProp === "format") column.format = control.value;
+    else column.label = control.value;
     item.columns[index] = column;
     renderCanvas();
     if (event.type === "change" || control.tagName === "SELECT") renderProperties();
@@ -298,7 +404,7 @@
         const available = Array.isArray(records) && records[0] ? Object.keys(records[0]) : [];
         const used = item.columns.map(normalizeColumn).map(column => column.field);
         const field = available.find(key => !used.includes(key)) || "";
-        item.columns.push({ field, label: columnCaption(field) });
+        item.columns.push({ field, label: columnCaption(field), format: "" });
         renderProperties(); renderCanvas();
       }
       return;
@@ -321,5 +427,10 @@
   $("#done-preview").addEventListener("click", () => $("#preview-dialog").close());
   $("#print-button").addEventListener("click", () => { const win = window.open("", "_blank"); if (!win) { toast("Permita a abertura da janela de impressão."); return; } win.document.write(printableHtml()); win.document.close(); });
   $("#preview-dialog").addEventListener("click", event => { if (event.target === $("#preview-dialog")) $("#preview-dialog").close(); });
+  state.customCss = ""; state.includeSample = false;
+  $("#custom-css").addEventListener("input", event => { state.customCss = event.target.value; });
+  $("#include-sample").addEventListener("change", event => { state.includeSample = event.target.checked; });
+  $("#save-model").addEventListener("click", saveModel);
+  $("#model-file").addEventListener("change", async event => { const file = event.target.files?.[0]; if (!file) return; try { await openModelFile(file); } catch (error) { toast("Não foi possível abrir o modelo: " + error.message); } event.target.value = ""; });
   renderFields(); render();
 })();

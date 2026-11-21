@@ -1,0 +1,12 @@
+{
+  "name": "logosreport",
+  "version": "0.2.0",
+  "description": "Editor visual de templates HTML de relatório que apresentam dados JSON.",
+  "private": true,
+  "scripts": {
+    "test": "node --test \"tests/*.test.js\""
+  },
+  "devDependencies": {
+    "jsdom": "^31.0.1"
+  }
+}

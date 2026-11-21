@@ -45,3 +45,9 @@
 body.resizing,body.resizing *{user-select:none!important}
 body.resizing-width,body.resizing-width *{cursor:ew-resize!important}
 body.resizing-height,body.resizing-height *{cursor:ns-resize!important}
+
+/* Prévia: iframe com o mesmo HTML que será exportado. */
+.preview-frame{display:block;width:100%;height:calc(92vh - 150px);border:0;background:#fff}
+.setting-row.stacked{display:grid;gap:5px;align-items:start}
+.setting-row.stacked textarea{width:100%;height:78px;resize:vertical;border:1px solid var(--line);border-radius:6px;padding:7px;font:10px/1.5 Consolas,monospace}
+.page-settings .check-row{display:flex;gap:6px;align-items:center;font-size:10px;color:#526171;margin-top:11px}
