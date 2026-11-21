@@ -1,3 +1,6 @@
+<p align="center">
+  <img src="docs/images/logosreport-logo.png" alt="LogosReport — Pensamento em forma de relatório" width="720">
+</p>
 # LogosReport
 
 Editor visual para criar **templates HTML de relatório**: só a estrutura, que apresenta dados JSON.
