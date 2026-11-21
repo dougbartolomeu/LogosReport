@@ -1,0 +1,72 @@
+{
+  "empresa": {
+    "nome_fantasia": "COMREES REBOBINAGENS E SERVIÇOS",
+    "razao_social": "COMREES MAQUINAS E EQUIPAMENTOS LTDA",
+    "cnpj": "33.317.931/0001-77",
+    "endereco": "Rua Ucraniana, 42, Bairro Rocio, União da Vitória - PR - CEP: 84600-691",
+    "celular": "42 98431-7443",
+    "telefone": "42 3522-9346"
+  },
+  "id_ordem_servico": 6139,
+  "data_abertura": "2026-11-05T08:30:00",
+  "data_prevista_conclusao": null,
+  "cliente": {
+    "nome": "CLUBE EXEMPLO LTDA",
+    "telefone": "42 99999-0000",
+    "telefone2": null,
+    "cpf_cnpj": "00000000000191",
+    "endereco": "Rua Exemplo, 100, Centro, União da Vitória - PR"
+  },
+  "equipamento": {
+    "tipo": "Bomba de piscina",
+    "marca": "DANCOR / WEG",
+    "modelo": null,
+    "identificacao": null,
+    "potencia": "3 CV",
+    "polaridade": "2",
+    "rpm": null,
+    "voltagem": null,
+    "fases": null
+  },
+  "queixa_cliente": "Bomba com barulho e vazando água pelo selo.",
+  "itens": [
+    {
+      "codigo": "375",
+      "descricao": "ROLAMENTO 6203 ZZ C3 NSK",
+      "quantidade": "2.00000",
+      "valor_unitario": "15.75000",
+      "valor_desconto": "0.00000",
+      "valor_total": "31.50000"
+    },
+    {
+      "codigo": "1780",
+      "descricao": "SELO MEC. 3/4\" T-16 SB-MG BUNA SELOBRAS",
+      "quantidade": "1.00000",
+      "valor_unitario": "22.00000",
+      "valor_desconto": "0.00000",
+      "valor_total": "22.00000"
+    }
+  ],
+  "total_itens": "53.50000",
+  "servicos": [
+    {
+      "codigo": "3",
+      "descricao": "Revisão de moto-bomba",
+      "quantidade": "1.00000",
+      "valor_unitario": "180.00000",
+      "valor_desconto": "0.00000",
+      "valor_total": "180.00000"
+    },
+    {
+      "codigo": "27",
+      "descricao": "Retirada/Instalação de bomba de Piscina",
+      "quantidade": "1.00000",
+      "valor_unitario": "150.00000",
+      "valor_desconto": "0.00000",
+      "valor_total": "150.00000"
+    }
+  ],
+  "total_servicos": "330.00000",
+  "total_ordem": "383.50000",
+  "observacao": null
+}
